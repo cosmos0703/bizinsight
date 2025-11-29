@@ -1,0 +1,88 @@
+/* Global Tailwind Imports */
+@import "tailwindcss";
+
+/* Font Import */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+@layer base {
+  :root {
+    --color-bg: #f8fafc; /* Slate 50 */
+    --color-card: #ffffff;
+    --color-text: #0f172a; /* Slate 900 */
+    --color-muted: #64748b; /* Slate 500 */
+    --color-primary: #2563eb; /* Blue 600 */
+    --color-danger: #dc2626; /* Red 600 */
+    --color-success: #059669; /* Emerald 600 */
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+  }
+}
+
+@layer components {
+  /* Modern Light Bento Effect */
+  .bento-card {
+    background-color: rgba(255, 255, 255, 0.7); /* bg-white/70 */
+    backdrop-filter: blur(24px); /* backdrop-blur-xl */
+    -webkit-backdrop-filter: blur(24px);
+    border-width: 1px;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.8); /* border-white/80 */
+    border-radius: 1.5rem; /* rounded-3xl */
+    position: relative;
+    overflow: hidden;
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+    
+    /* Box Shadow: Combined shadow-sm and custom shadow */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  }
+
+  .bento-card:hover {
+    transform: translateY(-0.25rem); /* -translate-y-1 */
+    border-color: #cbd5e1; /* border-slate-300 */
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.01);
+  }
+
+  .glow-point {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    top: -5rem; /* -top-20 */
+    right: -5rem; /* -right-20 */
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, rgba(255,255,255,0) 70%);
+  }
+
+  /* Custom Scrollbar for inner content */
+  .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+  }
+  .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+  }
+}
+
+/* Custom Animation for Marquee */
+/* Changed to start from 0% so text is visible immediately */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); } /* Move only half if content is duplicated */
+}
+
+.animate-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marquee 90s linear infinite;
+}
+
+/* Pause animation on hover */
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
