@@ -1,170 +1,114 @@
 import { loadCSV } from '../data/csvLoader';
+import { DONG_COORDINATES } from '../data/dongCoordinates';
 
 // Filenames
-// Changed to the new rent file
 const FILE_RENT = '임대동향 지역별 임대료(2024년3분기~)_소규모 상가.csv';
-// Street Population
-const FILE_POP = '서울시 상권분석서비스(길단위인구-자치구).csv';
-const FILE_OPENINGS = '영세자영업+자치구별+개업+점포수_20251128221709.csv';
-// Estimated Revenue
+const FILE_POP = '서울시 상권분석서비스(길단위인구-행정동).csv';
+const FILE_OPENINGS = '서울시 상권분석서비스(점포-행정동)_2024년 2.csv';
 const FILE_REVENUE = '서울시 상권분석서비스(추정매출-행정동)_2024년.csv';
-// Closure Data
-const FILE_CLOSURE = '영세자영업+종사자+규모별+폐업+점포수_20251128221620.csv';
+
+// Helper Map: Rent Commercial Area -> Administrative Dong
+const RENT_AREA_MAP = {
+    '광화문': '사직동', '남대문': '회현동', '명동': '명동', '을지로': '을지로동', '종로': '종로1.2.3.4가동',
+    '강남대로': '역삼1동', '교대역': '서초3동', '논현역': '논현1동', '신사역': '신사동', '압구정': '압구정동', '청담': '청담동', '테헤란로': '역삼1동',
+    '공덕역': '공덕동', '동교/연남': '연남동', '망원역': '망원1동', '신촌/이대': '신촌동', '영등포역': '영등포본동', '홍대/합정': '서교동',
+    '가락시장': '가락1동', '건대입구': '화양동', '군자': '군자동', '노량진': '노량진1동', '뚝섬': '성수1가1동', '목동': '목1동',
+    '사당': '사당1동', '서울대입구역': '청룡동', '성신여대': '동선동', '수유': '수유3동', '숙명여대': '청파동', '신림역': '신림동',
+    '여의도': '여의동', '연신내': '불광동', '왕십리': '행당1동', '용산역': '한강로동', '이태원': '이태원1동', '잠실/송파': '잠실본동',
+    '천호': '천호2동', '혜화동': '혜화동'
+};
 
 export const loadAllData = async () => {
     try {
-        const [rentRaw, popRaw, openingsRaw, revenueRaw, closureRaw] = await Promise.all([
-            loadCSV(FILE_RENT, 'windows-949'), // Use standard encoding label
+        const [rentRaw, popRaw, openingsRaw, revenueRaw] = await Promise.all([
+            loadCSV(FILE_RENT, 'windows-949'),
             loadCSV(FILE_POP, 'EUC-KR'),
-            loadCSV(FILE_OPENINGS, 'UTF-8'),
+            loadCSV(FILE_OPENINGS, 'EUC-KR'),
             loadCSV(FILE_REVENUE, 'EUC-KR'),
-            loadCSV(FILE_CLOSURE, 'UTF-8')
         ]);
 
-        console.log("DEBUG: Rent Raw Loaded", rentRaw.length);
-        if (rentRaw.length > 0) {
-            console.log("DEBUG: Rent First Row Values", Object.values(rentRaw[0]));
-        }
+        const dongData = {};
 
-        // 1. Process Rent Data
-        // File Structure (based on assumption): No, Region1, Region2, Region3, 2024.3Q, ...
-        // We need to inspect the keys. Based on 'head', it seems multi-line header.
-        // But loadCSV likely treats first line as header.
-        // Let's assume the columns are indices or names.
-        
-        const rentData = {};
-        
-        // Helper to normalize district names
-        const normalizeDistrict = (name) => {
-            if (!name) return '';
-            const trimmed = name.trim();
-            if (trimmed.endsWith('구')) return trimmed;
-            return trimmed + '구';
-        };
+        // Initialize Data Structure for Target Dongs
+        Object.keys(DONG_COORDINATES).forEach(dong => {
+            dongData[dong] = { rent: 0, population: 0, openings: 0, revenue: 0 };
+        });
 
-        // Mapping table for Sub-districts/Commercial Areas to Gu
-        
+        // 1. Rent Data (Commercial Area -> Dong Mapping)
         rentRaw.forEach(row => {
-            // Skip metadata/header rows
-            const rowValues = Object.values(row);
-            if (rowValues.some(v => v === '지역' || v === '임대료' || v === '소계')) return;
-
-            let districtName = null;
-
-            // Find District Name (Iterate columns to find a Gu name)
-            for (const val of rowValues) {
-                if (typeof val === 'string') {
-                    const norm = normalizeDistrict(val);
-                    if (['종로구','중구','용산구','성동구','광진구','동대문구','중랑구','성북구','강북구','도봉구','노원구','은평구','서대문구','마포구','양천구','강서구','구로구','금천구','영등포구','동작구','관악구','서초구','강남구','송파구','강동구'].includes(norm)) {
-                        districtName = norm;
-                        break;
-                    }
-                }
-            }
-
-            // Find Rent Value
-            // Try specific keys found in logs first
-            let rawValue = row['2024년 3분기'] || row['2024.3Q'] || row['2024.09'];
-            
-            // If not found by key, try finding a number-like string in values
+            // Find rent value
+            let rawValue = row['2024년 3분기'] || row['2024.3Q'];
             if (!rawValue) {
-                 // heuristic: finding a float between 10 and 1000
-                 rawValue = rowValues.find(v => !isNaN(parseFloat(v)) && parseFloat(v) > 10 && parseFloat(v) < 1000);
+                 const vals = Object.values(row);
+                 rawValue = vals.find(v => !isNaN(parseFloat(v)) && parseFloat(v) > 5 && parseFloat(v) < 1000);
             }
+            if (!rawValue) return;
 
-            if (districtName === '노원구') {
-                console.log('DEBUG Nowon-gu:', { districtName, rawValue, row });
-            }
+            const rentSqM = parseFloat(rawValue);
+            const rentPyeong = Math.round((rentSqM * 3.3) / 10); // Man-won
 
-            if (districtName && rawValue) {
-                const rentSqM = parseFloat(rawValue);
-                // Convert (Thousand Won / m2) -> (Ten Thousand Won / Pyeong)
-                // 1 Pyeong = 3.3 m2
-                // Val: 50.0 (50,000 KRW/m2) -> 50 * 3.3 = 165,000 KRW/Pyeong = 16.5 Man-won
-                const rentPyeong = (rentSqM * 3.3) / 10;
-                
-                if (rentData[districtName]) {
-                    rentData[districtName] = Math.round((rentData[districtName] + rentPyeong) / 2);
-                } else {
-                    rentData[districtName] = Math.round(rentPyeong);
-                }
-            }
-        });
-
-        // 2. Process Population Data
-        const popData = {};
-        popRaw.forEach(row => {
-            const rawDistrict = row['자치구_코드_명'];
-            if (rawDistrict) {
-                const district = normalizeDistrict(rawDistrict);
-                popData[district] = parseInt(row['총_유동인구_수'] || 0);
-            }
-        });
-
-        // 3. Process Openings Data
-        const openingsData = {};
-        openingsRaw.forEach(row => {
-            const rawDistrict = row['자치구별(1)'];
-            if (rawDistrict && rawDistrict !== '서울시' && rawDistrict !== '합계') {
-                const district = normalizeDistrict(rawDistrict);
-                openingsData[district] = parseInt(row['전체'] || 0);
-            }
-        });
-
-        // 4. Process Revenue Data
-        const GU_CODES = {
-            '11110': '종로구', '11140': '중구', '11170': '용산구', '11200': '성동구', '11215': '광진구',
-            '11230': '동대문구', '11260': '중랑구', '11290': '성북구', '11305': '강북구', '11320': '도봉구',
-            '11350': '노원구', '11380': '은평구', '11410': '서대문구', '11440': '마포구', '11470': '양천구',
-            '11500': '강서구', '11530': '구로구', '11545': '금천구', '11560': '영등포구', '11590': '동작구',
-            '11620': '관악구', '11650': '서초구', '11680': '강남구', '11710': '송파구', '11740': '강동구'
-        };
-
-        const revenueData = {}; 
-
-        revenueRaw.forEach(row => {
-            const dongCode = row['행정동_코드']; 
-            if (!dongCode) return;
+            // Find matching dong
+            const values = Object.values(row);
+            let targetDong = null;
             
-            const guCode = dongCode.toString().substring(0, 5);
-            const guName = GU_CODES[guCode];
-
-            if (guName) {
-                if (!revenueData[guName]) {
-                    revenueData[guName] = { totalSales: 0, count: 0 };
+            // Direct map check
+            for (const val of values) {
+                if (RENT_AREA_MAP[val]) {
+                    targetDong = RENT_AREA_MAP[val];
+                    break;
                 }
-                const sales = parseInt(row['분기당_매출_금액'] || 0);
-                revenueData[guName].totalSales += sales;
-                revenueData[guName].count += 1;
+            }
+
+            if (targetDong && dongData[targetDong]) {
+                // If multiple areas map to same dong, average or take max (Taking max for conservative cost est)
+                dongData[targetDong].rent = Math.max(dongData[targetDong].rent, rentPyeong);
             }
         });
 
-        const finalRevenue = {};
-        Object.keys(revenueData).forEach(gu => {
-            finalRevenue[gu] = Math.round(revenueData[gu].totalSales / 10000); 
+        // 2. Population Data (Dong Level)
+        popRaw.forEach(row => {
+            const dongName = row['행정동_코드_명'];
+            const popVal = parseInt(row['총_유동인구_수'] || 0);
+            if (dongName && dongData[dongName]) {
+                dongData[dongName].population = popVal;
+            }
         });
 
-        // 5. Process Closure Data
-        const closureData = [];
-        closureRaw.forEach(row => {
-             if(row['생활밀접업종별(2)'] && row['생활밀접업종별(2)'] !== '소계') {
-                 closureData.push({
-                     sector: row['생활밀접업종별(2)'],
-                     count: parseInt(row['2023'] || 0) 
-                 });
-             }
+        // 3. Openings Data (Dong Level)
+        openingsRaw.forEach(row => {
+            const dongName = row['행정동_코드_명']; // Assuming this file has dong name
+            const openVal = parseInt(row['개업_점포_수'] || 0); // Check column name
+            if (dongName && dongData[dongName]) {
+                dongData[dongName].openings += openVal; // Add up (if multiple quarters)
+            }
         });
 
-        return {
-            rent: rentData,
-            population: popData, 
-            openings: openingsData,
-            revenue: finalRevenue,
-            closures: closureData
-        };
+        // 4. Revenue Data (Dong Level)
+        revenueRaw.forEach(row => {
+            const dongName = row['행정동_코드_명'];
+            const salesVal = parseInt(row['분기당_매출_금액'] || 0);
+            if (dongName && dongData[dongName]) {
+                dongData[dongName].revenue += salesVal; // Add up all sectors
+            }
+        });
+
+        // Format for UI consumption
+        // Convert large numbers to Man-won unit
+        const formattedData = {};
+        Object.keys(dongData).forEach(dong => {
+            const d = dongData[dong];
+            formattedData[dong] = {
+                rent: d.rent, // Man-won
+                population: d.population,
+                openings: d.openings,
+                revenue: Math.round(d.revenue / 10000) // Man-won
+            };
+        });
+
+        return formattedData;
 
     } catch (error) {
-        console.error("Error loading all data:", error);
-        return { rent: {}, population: {}, openings: {}, revenue: {}, closures: [] };
+        console.error("Error loading dong data:", error);
+        return {};
     }
 };
