@@ -8,7 +8,7 @@ import {
     Tooltip, Cell, ZAxis 
 } from 'recharts';
 import { loadAllData } from '../utils/dataLoader';
-import { DISTRICT_COORDINATES } from '../data/districtCoordinates';
+import { DONG_COORDINATES } from '../data/dongCoordinates';
 import { fetchYouTubeTrending } from '../utils/youtube';
 
 // --- STYLES & CONSTANTS ---
@@ -30,24 +30,21 @@ const FALLBACK_TRENDS = [
 
 // --- COMPONENTS ---
 
-const Ticker = ({ items }) => (
-    <div className="flex-1 bg-gray-50 rounded-full h-9 flex items-center px-4 overflow-hidden border border-gray-100 relative mx-6">
+const Ticker = ({ items, currentIndex }) => (
+    <div className="flex-1 bg-white border border-slate-100 rounded-full h-9 flex items-center px-4 overflow-hidden relative mx-6 shadow-sm">
         <div className="absolute left-4 z-10 bg-[#ff0000] text-white text-[10px] font-bold px-2 py-0.5 rounded animate-pulse">LIVE</div>
-        <div className="w-full overflow-hidden whitespace-nowrap">
-            <div className="inline-block animate-marquee pl-full">
-                {[...items, ...items].map((k, i) => (
-                    <a 
-                        key={i} 
-                        href={`https://www.youtube.com/watch?v=${k.id}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="inline-block px-4 text-sm font-semibold text-gray-700 hover:text-[#ff0000] hover:underline transition-colors"
-                    >
-                        <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-2 mb-0.5"></span>
-                        {k.title}
-                    </a>
-                ))}
-            </div>
+        <div className="w-full overflow-hidden h-[20px] relative">
+             {items.map((k, i) => (
+                <a 
+                    key={i} 
+                    href={`https://www.youtube.com/watch?v=${k.id}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className={`absolute inset-0 flex items-center text-sm font-semibold text-slate-700 truncate transition-all duration-500 ease-in-out hover:text-[#ff0000] hover:underline cursor-pointer pl-12 ${i === currentIndex ? 'translate-y-0 opacity-100 z-30 pointer-events-auto' : 'translate-y-full opacity-0 z-0 pointer-events-none'}`}
+                >
+                    {k.title}
+                </a>
+            ))}
         </div>
     </div>
 );
@@ -60,21 +57,24 @@ export default function SmartBizMap_Bento() {
     const [cart, setCart] = useState([]);
     const [loading, setLoading] = useState(true);
     const [youtubeTrends, setYoutubeTrends] = useState(FALLBACK_TRENDS);
+    const [currentTrendIndex, setCurrentTrendIndex] = useState(0);
 
-    // 1. Load Data
+    // 1. Load Data (Dong Level)
     useEffect(() => {
         const fetchData = async () => {
-            const { rent, population, openings } = await loadAllData();
+            const dongData = await loadAllData();
             
-            const processed = Object.keys(DISTRICT_COORDINATES).map(name => {
-                const coords = DISTRICT_COORDINATES[name];
+            const processed = Object.keys(DONG_COORDINATES).map(name => {
+                const coords = DONG_COORDINATES[name];
+                const d = dongData[name] || { rent: 0, population: 0, openings: 0, revenue: 0 };
                 return {
                     name,
                     lat: coords.lat,
                     lng: coords.lng,
-                    rent: rent[name] || 0, // Man-won/Pyeong
-                    traffic: population[name] || 0,
-                    stores: openings[name] || 0,
+                    rent: d.rent, // Man-won/Pyeong
+                    traffic: d.population,
+                    stores: d.openings,
+                    revenue: d.revenue
                 };
             });
             setDistricts(processed);
@@ -90,32 +90,35 @@ export default function SmartBizMap_Bento() {
         fetchData();
     }, []);
 
-    // 2. Score Calculation Logic (replicated from test.html)
+    // Ticker Animation
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCurrentTrendIndex((prev) => (prev + 1) % youtubeTrends.length);
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [youtubeTrends]);
+
+    // 2. Score Calculation Logic
     const rankedDistricts = useMemo(() => {
         if (!districts.length) return [];
 
-        const budgetPower = capital / 100; // e.g. 10000 / 100 = 100 (Covering rent up to 100)
+        const budgetPower = capital / 100; 
         
-        // Find min/max for normalization
         const maxStore = Math.max(...districts.map(d => d.stores)) || 1;
         const minStore = Math.min(...districts.map(d => d.stores)) || 0;
         const maxTraffic = Math.max(...districts.map(d => d.traffic)) || 1;
         const minTraffic = Math.min(...districts.map(d => d.traffic)) || 0;
 
         const scored = districts.map(d => {
-            // Capital Score (20%)
             let capitalScore = 0;
             if (d.rent <= budgetPower) {
-                capitalScore = 100 - ((d.rent / budgetPower) * 20);
+                capitalScore = 100 - ((d.rent / (budgetPower || 1)) * 20);
             } else {
                 const overRatio = d.rent / (budgetPower || 1);
                 capitalScore = Math.max(0, 100 - (overRatio * 50));
             }
 
-            // Store Score (30%)
             const storeScore = ((d.stores - minStore) / (maxStore - minStore)) * 100;
-
-            // Traffic Score (50%)
             const trafficScore = ((d.traffic - minTraffic) / (maxTraffic - minTraffic)) * 100;
 
             const totalScore = (capitalScore * 0.2) + (storeScore * 0.3) + (trafficScore * 0.5);
@@ -123,14 +126,12 @@ export default function SmartBizMap_Bento() {
             return {
                 ...d,
                 totalScore: parseFloat(totalScore.toFixed(1)),
-                // Scatter Chart Coordinates
                 x: d.lng,
                 y: d.lat, 
-                z: Math.sqrt(d.traffic) / 50 // Size for bubble
+                z: Math.sqrt(d.traffic) // Size for bubble
             };
         });
 
-        // Sort desc
         return scored.sort((a, b) => b.totalScore - a.totalScore).map((d, i) => ({ ...d, rank: i + 1 }));
     }, [districts, capital]);
 
@@ -164,7 +165,7 @@ export default function SmartBizMap_Bento() {
                     </span>
                 </div>
                 
-                <Ticker items={youtubeTrends} />
+                <Ticker items={youtubeTrends} currentIndex={currentTrendIndex} />
 
                 <div className="flex items-center gap-3">
                     <div className="flex items-center text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
@@ -234,8 +235,8 @@ export default function SmartBizMap_Bento() {
                     <div className="w-full h-full p-4 pt-16 min-h-[400px]">
                         <ResponsiveContainer width="100%" height="100%">
                             <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                <XAxis type="number" dataKey="x" domain={[126.75, 127.18]} hide />
-                                <YAxis type="number" dataKey="y" domain={[37.42, 37.72]} hide />
+                                <XAxis type="number" dataKey="x" domain={[126.8, 127.2]} hide />
+                                <YAxis type="number" dataKey="y" domain={[37.4, 37.7]} hide />
                                 <ZAxis type="number" dataKey="z" range={[60, 8000]} />
                                 <Tooltip 
                                     cursor={{ strokeDasharray: '3 3' }}
@@ -259,7 +260,15 @@ export default function SmartBizMap_Bento() {
                                                         </div>
                                                         <div className="flex justify-between text-gray-600">
                                                             <span>💰 평균임대:</span>
-                                                            <span className="font-medium">{d.rent.toLocaleString()} (지수)</span>
+                                                            <span className="font-medium">{d.rent.toLocaleString()} 만원/평</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-gray-600">
+                                                            <span>📈 예상매출:</span>
+                                                            <span className="font-medium text-blue-600">
+                                                                {d.revenue >= 10000 
+                                                                    ? `${(d.revenue/10000).toFixed(1)}억` 
+                                                                    : `${d.revenue.toLocaleString()}만원`}
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 </div>
