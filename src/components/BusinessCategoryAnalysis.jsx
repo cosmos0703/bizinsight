@@ -171,12 +171,14 @@ const BusinessCategoryAnalysis = ({ salesData = [], closureData = [] }) => {
             const fetchData = async () => {
                 console.log("Starting data fetch...");
                 try {
-                    const sales = await loadCSV('서울시 상권분석서비스(추정매출-행정동)_2024년.csv', 'EUC-KR');
+                    const salesCols = ['서비스_업종_코드_명', '당월_매출_금액', '주말_매출_금액', '분기당_매출_건수'];
+                    const sales = await loadCSV('서울시 상권분석서비스(추정매출-행정동)_2024년.csv', 'EUC-KR', salesCols);
                     console.log("Sales data loaded:", sales.length);
-                    if (sales.length > 0) console.log("Sales keys:", Object.keys(sales[0]));
-                    const closure = await loadCSV('서울시 상권분석서비스(점포-행정동)_2024년 2.csv', 'EUC-KR');
+
+                    const closureCols = ['서비스_업종_코드_명', '점포_수', '개업_점포_수', '폐업_률'];
+                    const closure = await loadCSV('서울시 상권분석서비스(점포-행정동)_2024년 2.csv', 'EUC-KR', closureCols);
                     console.log("Closure data loaded:", closure.length);
-                    if (closure.length > 0) console.log("Closure keys:", Object.keys(closure[0]));
+
                     setInternalSalesData(sales);
                     setInternalClosureData(closure);
                 } catch (error) {
