@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
     Youtube, Wallet, Map as MapIcon, ShoppingCart, Trophy, 
-    ArrowRight, MapPin, X 
+    ArrowRight, MapPin, X, Sparkles, Info 
 } from 'lucide-react';
 import { 
     ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, 
@@ -10,6 +10,7 @@ import {
 import { loadAllData } from '../utils/dataLoader';
 import { DONG_COORDINATES } from '../data/dongCoordinates';
 import { fetchYouTubeTrending } from '../utils/youtube';
+import { getGeminiAnalysis } from '../utils/gemini';
 
 // --- STYLES & CONSTANTS ---
 const COLORS = {
@@ -52,12 +53,17 @@ const Ticker = ({ items, currentIndex }) => (
 // --- MAIN PAGE COMPONENT ---
 
 export default function SmartBizMap_Bento() {
-    const [capital, setCapital] = useState(10000); 
+    const [capital, setCapital] = useState(12000); 
     const [districts, setDistricts] = useState([]);
     const [cart, setCart] = useState([]);
     const [loading, setLoading] = useState(true);
     const [youtubeTrends, setYoutubeTrends] = useState(FALLBACK_TRENDS);
     const [currentTrendIndex, setCurrentTrendIndex] = useState(0);
+
+    // AI Analysis State
+    const [aiAnalysis, setAiAnalysis] = useState(null);
+    const [isAiLoading, setIsAiLoading] = useState(false);
+    const [showAnalysis, setShowAnalysis] = useState(false);
 
     // 1. Load Data (Dong Level)
     useEffect(() => {
@@ -66,14 +72,14 @@ export default function SmartBizMap_Bento() {
             
             const processed = Object.keys(DONG_COORDINATES).map(name => {
                 const coords = DONG_COORDINATES[name];
-                const d = dongData[name] || { rent: 0, population: 0, openings: 0, revenue: 0 };
+                const d = dongData[name] || { rent: 0, population: 0, openings: 0, revenue: 0, totalStores: 0 };
                 return {
                     name,
                     lat: coords.lat,
                     lng: coords.lng,
                     rent: d.rent, // Man-won/Pyeong
                     traffic: d.population,
-                    stores: d.openings,
+                    stores: d.totalStores || d.openings, // Use Total Stores if available
                     revenue: d.revenue
                 };
             });
@@ -102,7 +108,7 @@ export default function SmartBizMap_Bento() {
     const rankedDistricts = useMemo(() => {
         if (!districts.length) return [];
 
-        const budgetPower = capital / 100; 
+        const budgetPower = capital / 50; // Use x50 logic 
         
         const maxStore = Math.max(...districts.map(d => d.stores)) || 1;
         const minStore = Math.min(...districts.map(d => d.stores)) || 0;
@@ -151,6 +157,25 @@ export default function SmartBizMap_Bento() {
         return (sum / cart.length).toFixed(1);
     }, [cart]);
 
+    const handleAnalyze = async () => {
+        const target = cart.length > 0 ? cart[0] : rankedDistricts[0];
+        if (!target) return;
+
+        setShowAnalysis(true);
+        setIsAiLoading(true);
+        setAiAnalysis(null);
+
+        const comment = await getGeminiAnalysis(target.name, {
+            revenue: target.revenue,
+            population: target.traffic,
+            rent: target.rent,
+            openings: target.stores
+        });
+        
+        setAiAnalysis({ name: target.name, comment });
+        setIsAiLoading(false);
+    };
+
     if (loading) return <div className="h-screen flex items-center justify-center bg-gray-100">Loading...</div>;
 
     return (
@@ -198,20 +223,61 @@ export default function SmartBizMap_Bento() {
                                     onChange={(e) => setCapital(Number(e.target.value))}
                                     className="w-full text-2xl font-bold bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-600 outline-none shadow-sm text-gray-800" 
                                 />
-                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">만원</span>
+                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">
+                                    만원 ({(() => {
+                                        const uk = Math.floor(capital / 10000);
+                                        const chunwon = Math.floor((capital % 10000) / 1000);
+                                        let result = '';
+                                        if (uk > 0) result += `${uk}억`;
+                                        if (chunwon > 0) {
+                                            if (uk > 0) result += ' ';
+                                            result += `${chunwon}천만원`;
+                                        }
+                                        if (uk === 0 && chunwon === 0) result = '0원';
+                                        return result.trim();
+                                    })()})
+                                </span>
                             </div>
                             <input 
                                 type="range" 
-                                min="1000" max="50000" step="1000" 
+                                min="1000" max="100000" step="1000" 
                                 value={capital} 
                                 onChange={(e) => setCapital(Number(e.target.value))}
                                 className="w-full mt-3 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                             />
+                            <div className="flex justify-between text-[10px] font-bold text-slate-300 mt-2">
+                                <span>1천만</span>
+                                <span>10억+</span>
+                            </div>
+                             <p className="text-[10px] text-slate-400 mt-2">* 임대료 (월세)의 30배를 기준으로 필터링됩니다.</p>
                         </div>
 
-                        <div className="bg-white/80 p-3 rounded-xl border border-blue-100 text-xs text-gray-600">
-                            <p className="mb-1 font-semibold text-blue-600">💡 알고리즘 적용 중</p>
+                        <div className="bg-white/80 p-3 rounded-xl border border-blue-100 text-xs text-gray-600 relative group">
+                            <div className="flex items-center justify-between mb-1">
+                                <p className="font-semibold text-blue-600 flex items-center gap-1">
+                                    💡 알고리즘 적용 중 <Info size={12} className="cursor-help" />
+                                </p>
+                            </div>
                             <p>자본금(20%) + 점포수(30%) + 유동인구(50%)</p>
+                            <div className="absolute left-0 top-full mt-2 w-64 bg-slate-800 text-white p-4 rounded-xl shadow-xl z-50 hidden group-hover:block pointer-events-none">
+                                <h4 className="font-bold mb-2 text-yellow-400">📊 산출 로직 상세</h4>
+                                <ul className="space-y-2 text-[11px] leading-relaxed opacity-90">
+                                    <li>
+                                        <span className="font-bold text-white">💰 자본금 적합도 (20%):</span><br/>
+                                        내 예산보다 임대료가 낮을수록 고득점
+                                    </li>
+                                    <li>
+                                        <span className="font-bold text-white">🏪 점포 밀집도 (30%):</span><br/>
+                                        <span className="text-slate-300">현재 운영 중인 전체 점포 수 기준.</span><br/>
+                                        상권의 활성화 정도를 반영
+                                    </li>
+                                    <li>
+                                        <span className="font-bold text-white">👥 유동인구 (50%):</span><br/>
+                                        일일 평균 유동인구 수.<br/>
+                                        소자본 창업의 핵심 성공 요인
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -256,7 +322,7 @@ export default function SmartBizMap_Bento() {
                                                         </div>
                                                         <div className="flex justify-between text-gray-600">
                                                             <span>👥 유동인구:</span>
-                                                            <span className="font-medium">{d.traffic.toLocaleString()}</span>
+                                                            <span className="font-medium">{(d.traffic / 10000).toFixed(1)}만명</span>
                                                         </div>
                                                         <div className="flex justify-between text-gray-600">
                                                             <span>💰 평균임대:</span>
@@ -317,15 +383,24 @@ export default function SmartBizMap_Bento() {
                         ) : (
                             cart.map((item) => (
                                 <div key={item.name} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex justify-between items-center group hover:bg-white hover:shadow-sm transition">
-                                    <div>
-                                        <div className="font-bold text-gray-800">{item.name}</div>
-                                        <div className="text-xs text-gray-500">점수 <span className="text-blue-600 font-bold">{item.totalScore}</span></div>
+                                    <div className="flex-1">
+                                        <div className="font-bold text-gray-800 flex justify-between">
+                                            <span>{item.name}</span>
+                                            <span className="text-blue-600 text-xs font-bold">{item.totalScore}점</span>
+                                        </div>
+                                        <div className="text-[11px] text-gray-500 mt-1 flex gap-2">
+                                            <span className="font-medium">매출: <span className="font-bold text-gray-700">{item.revenue >= 10000 ? `${(item.revenue/10000).toFixed(1)}억` : `${item.revenue}만`}</span></span>
+                                            <span className="text-gray-300">|</span>
+                                            <span className="font-medium">유동: <span className="font-bold text-gray-700">{(item.traffic/10000).toFixed(1)}만명</span></span>
+                                            <span className="text-gray-300">|</span>
+                                            <span className="font-medium">임대: <span className="font-bold text-gray-700">{item.rent}만/평</span></span>
+                                        </div>
                                     </div>
-                                    <div className="text-right flex flex-col items-end">
+                                    <div className="text-right flex flex-col items-end pl-2 ml-2 border-l border-gray-200">
                                         <button onClick={() => removeFromCart(item.name)} className="text-gray-300 hover:text-red-500 mb-1">
                                             <X size={14} />
                                         </button>
-                                        <div className="text-xs font-bold text-green-600">+{item.yield}%</div>
+                                        <div className="text-[10px] font-bold text-green-600">+{item.yield}%</div>
                                     </div>
                                 </div>
                             ))
@@ -337,7 +412,9 @@ export default function SmartBizMap_Bento() {
                             <span className="text-xs text-gray-500">평균 예상 수익률</span>
                             <span className="font-bold text-blue-600">{avgYield}%</span>
                         </div>
-                        <button className="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl text-sm font-bold transition shadow-lg shadow-gray-200 mt-2 flex items-center justify-center gap-2">
+                        <button 
+                            onClick={handleAnalyze}
+                            className="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl text-sm font-bold transition shadow-lg shadow-gray-200 mt-2 flex items-center justify-center gap-2">
                             상세 비교 분석하기 <ArrowRight size={16} />
                         </button>
                     </div>
@@ -345,38 +422,70 @@ export default function SmartBizMap_Bento() {
 
                 {/* 5. Rank Detail (Bottom Right) */}
                 <div className="col-span-12 md:col-span-9 row-span-2 p-5 bg-white rounded-2xl shadow-sm border border-gray-200">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Trophy size={20} className="text-yellow-500" />
-                        <h2 className="font-bold text-lg">실시간 추천 TOP 3</h2>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-4 h-full pb-2">
-                        {[0, 1, 2].map((idx) => {
-                            const d = rankedDistricts[idx];
-                            if (!d) return null;
-                            const colors = [
-                                'bg-yellow-50 border-yellow-200 text-yellow-600',
-                                'bg-blue-50 border-blue-200 text-blue-600',
-                                'bg-gray-50 border-gray-200 text-gray-600'
-                            ];
-                            const labels = ['1st Place', '2nd Place', '3rd Place'];
+                    {!showAnalysis ? (
+                        <>
+                            <div className="flex items-center gap-2 mb-4">
+                                <Trophy size={20} className="text-yellow-500" />
+                                <h2 className="font-bold text-lg">실시간 추천 TOP 3</h2>
+                            </div>
                             
-                            return (
-                                <div key={idx} className={`border rounded-xl p-4 flex flex-col justify-center relative overflow-hidden group hover:shadow-md transition cursor-pointer ${colors[idx].split(' ')[0]} ${colors[idx].split(' ')[1]}`}>
-                                    <div className="flex items-center justify-between z-10">
-                                        <div>
-                                            <span className={`text-xs font-bold uppercase tracking-wider ${idx === 2 ? 'text-gray-400' : colors[idx].split(' ')[2]}`}>{labels[idx]}</span>
-                                            <h3 className="text-xl font-extrabold text-gray-800 mt-1">{d.name}</h3>
+                            <div className="grid grid-cols-3 gap-4 h-full pb-2">
+                                {[0, 1, 2].map((idx) => {
+                                    const d = rankedDistricts[idx];
+                                    if (!d) return null;
+                                    const colors = [
+                                        'bg-yellow-50 border-yellow-200 text-yellow-600',
+                                        'bg-blue-50 border-blue-200 text-blue-600',
+                                        'bg-gray-50 border-gray-200 text-gray-600'
+                                    ];
+                                    const labels = ['1st Place', '2nd Place', '3rd Place'];
+                                    
+                                    return (
+                                        <div key={idx} className={`border rounded-xl p-4 flex flex-col justify-center relative overflow-hidden group hover:shadow-md transition cursor-pointer ${colors[idx].split(' ')[0]} ${colors[idx].split(' ')[1]}`}>
+                                            <div className="flex items-center justify-between z-10">
+                                                <div>
+                                                    <span className={`text-xs font-bold uppercase tracking-wider ${idx === 2 ? 'text-gray-400' : colors[idx].split(' ')[2]}`}>{labels[idx]}</span>
+                                                    <h3 className="text-xl font-extrabold text-gray-800 mt-1">{d.name}</h3>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs text-gray-500">종합 점수</div>
+                                                    <div className={`text-2xl font-bold ${colors[idx].split(' ')[2]}`}>{d.totalScore}</div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-xs text-gray-500">종합 점수</div>
-                                            <div className={`text-2xl font-bold ${colors[idx].split(' ')[2]}`}>{d.totalScore}</div>
-                                        </div>
-                                    </div>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="h-full flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <Sparkles size={20} className="text-purple-500" />
+                                    <h2 className="font-bold text-lg">AI 상권 정밀 분석</h2>
                                 </div>
-                            );
-                        })}
-                    </div>
+                                <button onClick={() => setShowAnalysis(false)} className="text-sm text-gray-400 hover:text-gray-600 font-bold px-3 py-1 rounded-lg hover:bg-gray-100 transition">
+                                    목록으로 돌아가기
+                                </button>
+                            </div>
+                            
+                            <div className="flex-1 bg-gray-50 rounded-xl p-6 border border-gray-100 overflow-y-auto">
+                                {isAiLoading ? (
+                                    <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-400">
+                                        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                        <span className="text-sm font-medium animate-pulse">Gemini AI가 상권 데이터를 분석 중입니다...</span>
+                                    </div>
+                                ) : (
+                                    <div className="prose prose-sm max-w-none">
+                                        <h3 className="text-lg font-bold text-gray-800 mb-2">{aiAnalysis?.name} 분석 결과</h3>
+                                        <p className="text-gray-600 leading-relaxed whitespace-pre-wrap text-base">
+                                            {aiAnalysis?.comment}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
             </main>

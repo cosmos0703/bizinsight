@@ -4,14 +4,17 @@ const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 const CACHE_KEY = 'YOUTUBE_TREND_CACHE';
 const CACHE_DURATION = 60 * 60 * 1000; // 1 Hour
 
-export const fetchYouTubeTrending = async () => {
+export const fetchYouTubeTrending = async (searchQuery = "소자본 창업 아이템") => {
     if (!YOUTUBE_API_KEY) {
         console.warn('YouTube API Key not found');
         return [];
     }
 
+    // Cache Key based on query
+    const queryKey = `${CACHE_KEY}_${searchQuery}`;
+
     // 1. Check Cache
-    const cached = localStorage.getItem(CACHE_KEY);
+    const cached = localStorage.getItem(queryKey);
     if (cached) {
         const parsed = JSON.parse(cached);
         const age = Date.now() - parsed.timestamp;
@@ -23,10 +26,10 @@ export const fetchYouTubeTrending = async () => {
 
     // 2. Fetch Fresh Data
     try {
-        console.log('Fetching YouTube Trends from API...');
-        const query = encodeURIComponent("소자본 창업 아이템");
+        console.log(`Fetching YouTube for: ${searchQuery}...`);
+        const query = encodeURIComponent(searchQuery);
         const response = await fetch(
-            `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&type=video&order=viewCount&maxResults=10&key=${YOUTUBE_API_KEY}`
+            `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&type=video&order=viewCount&maxResults=5&key=${YOUTUBE_API_KEY}`
         );
 
         if (!response.ok) {
@@ -44,7 +47,7 @@ export const fetchYouTubeTrending = async () => {
             }));
 
             // 3. Save to Cache
-            localStorage.setItem(CACHE_KEY, JSON.stringify({
+            localStorage.setItem(queryKey, JSON.stringify({
                 timestamp: Date.now(),
                 data: formattedData
             }));

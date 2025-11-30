@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+\n# Security & Local files
+.env
+*.png
+simple_light copy.html
+ref.tsx
