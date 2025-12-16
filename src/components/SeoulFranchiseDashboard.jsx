@@ -806,9 +806,85 @@ export default function SeoulFranchiseDashboardV3() {
                 <HeaderPill step={step} setStep={setStep} />
                 
                 <div className="flex-1 flex flex-col p-8 pt-24 max-w-7xl mx-auto w-full gap-6 overflow-y-auto">
-                    {/* ... Header ... */}
-                    
-                    {/* ... Matrix ... */}
+                    {/* Header Section */}
+                    <div className="flex items-center gap-4 mb-2">
+                         <button onClick={() => setStep(2)} className="p-2 rounded-full hover:bg-white hover:shadow-md transition-all"><ArrowLeft size={24} className="text-slate-600" /></button>
+                         <div>
+                             <h2 className="text-2xl font-black text-slate-800">후보 상권 비교 분석</h2>
+                             <p className="text-slate-500 text-sm">선택하신 <span className="font-bold text-blue-600">{cart.length > 0 ? cart.length : displayData.length}개 지역</span>의 경쟁력과 수익성을 한눈에 파악하세요.</p>
+                         </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full min-h-[600px]">
+                        
+                        {/* LEFT: Blue Ocean Matrix */}
+                        <div className="lg:col-span-2 bg-white rounded-[2rem] p-8 shadow-xl border border-white/60 flex flex-col relative overflow-hidden">
+                            <h3 className="font-bold text-slate-800 text-lg mb-6 flex items-center gap-2">
+                                <Activity size={20} className="text-blue-500" /> 경쟁 강도 vs 기대 수익 (Blue Ocean Matrix)
+                            </h3>
+                            
+                            <div className="flex-1 relative border border-slate-100 rounded-2xl overflow-visible bg-slate-50/50">
+                                {/* Quadrant Backgrounds */}
+                                <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
+                                    {/* Top Left: Low Comp (Blue), High Rev (Blue) -> The Best (Blue Ocean) */}
+                                    <div className="bg-blue-50/60 border-r border-b border-dashed border-blue-200 flex p-4"><span className="font-black text-blue-300 text-xl uppercase tracking-tight">Blue Ocean (기회)</span></div> 
+                                    
+                                    {/* Top-Right (High X, High Y): Good Rev but High Comp -> Purple/Red */}
+                                    <div className="bg-purple-50/40 border-b border-dashed border-purple-200 flex justify-end p-4"><span className="font-black text-purple-200 text-xl uppercase tracking-tight">High Risk</span></div> 
+                                    
+                                    {/* Bottom-Left (Low X, Low Rev): Low Comp but Low Rev -> Gray */}
+                                    <div className="bg-slate-100/50 border-r border-dashed border-slate-200 flex items-end p-4"><span className="font-black text-slate-300 text-xl uppercase tracking-tight">Stagnant</span></div> 
+                                    
+                                    {/* Bottom-Right (High X, Low Rev): High Comp, Low Rev -> Red Ocean */}
+                                    <div className="bg-red-50/60 flex justify-end items-end p-4"><span className="font-black text-red-200 text-xl uppercase tracking-tight">Red Ocean (위험)</span></div>
+                                </div>
+                                
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                        <XAxis type="number" dataKey="x" name="경쟁강도" domain={[0, 100]} hide />
+                                        <YAxis type="number" dataKey="y" name="기대수익" domain={[0, 100]} hide />
+                                        <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                const d = payload[0].payload;
+                                                return <div className="bg-white/95 backdrop-blur-sm p-4 shadow-2xl rounded-2xl text-xs font-bold border border-white/50 z-50 min-w-[150px] pointer-events-none" style={{ pointerEvents: 'none' }}>
+                                                    <div className="text-sm text-slate-800 mb-2 flex items-center gap-2">
+                                                        <MapPin size={14} className="text-red-500" /> {d.name}
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex justify-between text-slate-500"><span>💰 기대수익:</span> <span className="text-blue-600">{d.y}점</span></div>
+                                                        <div className="flex justify-between text-slate-500"><span>⚔️ 경쟁강도:</span> <span className="text-red-500">{d.x}점</span></div>
+                                                    </div>
+                                                </div>;
+                                            }
+                                            return null;
+                                        }} />
+                                        <Scatter name="Regions" data={scatterData} onClick={(e) => setFocusedCompId(e.payload.id)}>
+                                            {scatterData.map((entry, index) => (
+                                                <Cell 
+                                                    key={`cell-${index}`} 
+                                                    fill={entry.id === activeComp.id ? '#2563eb' : (entry.y > 50 && entry.x < 50 ? '#3b82f6' : '#ef4444')} 
+                                                    stroke="white" 
+                                                    strokeWidth={2} 
+                                                    r={8} 
+                                                    className="cursor-pointer shadow-xl filter drop-shadow-lg hover:opacity-80"
+                                                />
+                                            ))}
+                                        </Scatter>
+                                    </ScatterChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="flex justify-between text-xs font-bold text-slate-400 mt-2 px-2">
+                                <span>Low ← 경쟁 강도 → High</span>
+                                <span>Low ← 기대 수익 → High</span>
+                            </div>
+                            <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 leading-relaxed">
+                                <p className="mb-2"><span className="font-bold text-blue-500">Blue Ocean Matrix</span>는 실제 서울시 공공데이터를 기반으로 산출되었습니다.</p>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li><span className="font-bold">기대 수익 (Y축):</span> 해당 행정동의 실제 카드 매출 데이터와 유동인구 데이터를 7:3 비율로 가중 평균하여 점수화했습니다.</li>
+                                    <li><span className="font-bold">경쟁 강도 (X축):</span> 해당 지역의 점포 밀집도와 최근 폐업률 데이터를 종합하여 산출했습니다. 좌측(낮음)일수록 진입 장벽이 낮음을 의미합니다.</li>
+                                </ul>
+                            </div>
+                        </div>
 
                         {/* RIGHT: Trend & Analysis */}
                         <div className="flex flex-col gap-6 h-full">
@@ -902,6 +978,7 @@ export default function SeoulFranchiseDashboardV3() {
                         </div>
                     </div>
                 </div>
+            </div>
         );
     };
 
