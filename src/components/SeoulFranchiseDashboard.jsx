@@ -828,7 +828,7 @@ export default function SeoulFranchiseDashboardV3() {
                                                 contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} 
                                                 formatter={(value, name) => [value.toLocaleString(), name === 'value' ? activeComp.name : '서울시 평균']}
                                             />
-                                            <Legend iconType="circle" formatter={(value) => <span className="text-xs font-bold text-slate-500">{value === 'value' ? activeComp.name : '서울시 평균'}</span>} />
+                                            <Legend iconType="circle" formatter={(value) => (<span className="text-xs font-bold text-slate-500">{value === 'value' ? activeComp.name : '서울시 평균'}</span>)} />
                                             <Line type="monotone" dataKey="value" name="value" stroke="#2563eb" strokeWidth={3} dot={{r: 4, strokeWidth: 2, fill: 'white'}} activeDot={{r: 6}} />
                                             <Line type="monotone" dataKey="avg" name="avg" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" dot={false} />
                                         </LineChart>
@@ -902,7 +902,6 @@ export default function SeoulFranchiseDashboardV3() {
                         </div>
                     </div>
                 </div>
-            </div>
         );
     };
 
