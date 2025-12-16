@@ -71,7 +71,7 @@ const getHeatmapColor = (value, min, max, maxLimit = null) => {
 
 // --- COMPONENTS ---
 const HeaderPill = ({ step, setStep }) => (
-  <header className="absolute top-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-auto">
+  <header className="absolute top-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-auto print:hidden">
     <div className="bg-white/95 backdrop-blur-md shadow-xl rounded-3xl px-8 py-4 flex items-center gap-8 border border-white/50 transition-all hover:shadow-2xl">
       <div className="flex items-center gap-2 cursor-pointer self-start mt-1" onClick={() => setStep(1)}>
         <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-500/30">B</div>
@@ -477,6 +477,7 @@ export default function SeoulFranchiseDashboardV3() {
     const handleIndustrySelect = (industry) => {
         const mapping = {
             "커피-음료": { cat: '외식업', sub: "카페/디저트" },
+            "카페/디저트": { cat: '외식업', sub: "카페/디저트" },
             "치킨전문점": { cat: '외식업', sub: "치킨/호프" },
             "한식음식점": { cat: '외식업', sub: "한식" },
             "양식음식점": { cat: '외식업', sub: "양식" },
@@ -1043,7 +1044,7 @@ export default function SeoulFranchiseDashboardV3() {
                         {/* Header Section */}
                         <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-2">
                              <div className="flex items-center gap-4">
-                                <button onClick={() => setStep(3)} className="p-2 rounded-full hover:bg-white hover:shadow-md transition-all"><ArrowLeft size={24} className="text-slate-600" /></button>
+                                <button onClick={() => setStep(3)} className="p-2 rounded-full hover:bg-white hover:shadow-md transition-all print:hidden"><ArrowLeft size={24} className="text-slate-600" /></button>
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${target.revenue_score >= 80 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>종합 점수 {target.revenue_score}점</span>
@@ -1053,9 +1054,9 @@ export default function SeoulFranchiseDashboardV3() {
                                     <h1 className="text-3xl font-black text-slate-800">{target.name} 상세 분석</h1>
                                 </div>
                              </div>
-                             <div className="flex gap-2">
-                                 <button className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl shadow-sm hover:bg-slate-50 text-sm">PDF 다운로드</button>
-                                 <button className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 text-sm">리포트 공유하기</button>
+                             <div className="flex gap-2 print:hidden">
+                                 <button onClick={() => window.print()} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl shadow-sm hover:bg-slate-50 text-sm">PDF 다운로드</button>
+                                 <button onClick={() => { navigator.clipboard.writeText(window.location.href); alert('리포트 링크가 복사되었습니다!'); }} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 text-sm">리포트 공유하기</button>
                              </div>
                         </div>
 

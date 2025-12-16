@@ -45,10 +45,14 @@ export const loadAllData = async (targetCategory = null) => {
                 let targetIndData = null;
                 
                 if (targetCategory) {
-                    targetIndData = dongData.industries[targetCategory];
+                    // Map display name back to data key if necessary
+                    let lookupKey = targetCategory;
+                    if (targetCategory === '카페/디저트') lookupKey = '커피-음료';
+
+                    targetIndData = dongData.industries[lookupKey];
                     if (!targetIndData) {
                         // Try partial match
-                        const key = Object.keys(dongData.industries).find(k => k.includes(targetCategory) || targetCategory.includes(k));
+                        const key = Object.keys(dongData.industries).find(k => k.includes(lookupKey) || lookupKey.includes(k));
                         if (key) targetIndData = dongData.industries[key];
                     }
                 }
@@ -71,27 +75,38 @@ export const loadAllData = async (targetCategory = null) => {
                     item.details = targetIndData; // Pass details directly
                 } else {
                     // Aggregate ALL (General Market Status of Dong)
-                    // Note: Investment is tricky for "All". Use average or 0.
                     let totalRev = 0;
                     let totalStore = 0;
                     let totalOpen = 0;
                     let totalClose = 0;
                     
+                    // Initialize aggregated details
+                    const aggDetails = {
+                        time: Array(6).fill(0),
+                        age: { '10':0, '20':0, '30':0, '40':0, '50':0, '60':0 },
+                        day: { 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0, 'Sun':0 }
+                    };
+
                     Object.values(dongData.industries).forEach(ind => {
                         totalRev += ind.rev;
                         totalStore += ind.count;
                         totalOpen += ind.open;
                         totalClose += ind.close;
+
+                        // Aggregate Time
+                        if (ind.time) ind.time.forEach((t, i) => aggDetails.time[i] += t);
+                        // Aggregate Age
+                        if (ind.age) Object.keys(ind.age).forEach(k => aggDetails.age[k] += ind.age[k]);
+                        // Aggregate Day
+                        if (ind.day) Object.keys(ind.day).forEach(k => aggDetails.day[k] += ind.day[k]);
                     });
 
                     item.openings = totalOpen;
                     item.closeCount = totalClose;
                     item.totalStores = totalStore;
-                    // For aggregate, Revenue represents "Total Commercial Scale" of the Dong
-                    // So we just use a scaled down version or Raw Sum?
-                    // Let's use Monthly Avg per Store again to be consistent with scale
                     item.revenue = totalStore > 0 ? Math.round((totalRev / totalStore) / 12 / 10000) : 0; 
-                    item.investment = 0; // "All" doesn't have a specific cost
+                    item.investment = 0; 
+                    item.details = aggDetails; // Assign aggregated details
                 }
             }
 
