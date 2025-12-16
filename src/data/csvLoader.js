@@ -4,7 +4,7 @@ import Papa from 'papaparse';
 
 export const loadCSV = async (filename, encoding = 'UTF-8') => {
     try {
-        const response = await fetch(`/src/data/${filename}`);
+        const response = await fetch(`/data/${filename}`);
         const buffer = await response.arrayBuffer();
         const decoder = new TextDecoder(encoding);
         const csvText = decoder.decode(buffer);

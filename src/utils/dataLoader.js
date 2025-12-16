@@ -1,167 +1,107 @@
-import { loadCSV } from '../data/csvLoader';
 import { DONG_COORDINATES } from '../data/dongCoordinates';
 
-// Filenames
-const FILE_RENT = '행정동별 임대료_2025_2분기_환산임대료.csv'; 
-const FILE_POP = '서울시 상권분석서비스(길단위인구-행정동).csv';
-const FILE_OPENINGS = '서울시 상권분석서비스(점포-행정동)_2024년 2.csv';
-const FILE_REVENUE = '서울시 상권분석서비스(추정매출-행정동)_2024년.csv';
+// File Path
+const FILE_JSON = '/data/seoul_biz_data.json';
 
-export const loadAllData = async () => {
+export const loadAllData = async (targetCategory = null) => {
     try {
-        const [rentRaw, popRaw, openingsRaw, revenueRaw] = await Promise.all([
-            loadCSV(FILE_RENT, 'UTF-8'),
-            loadCSV(FILE_POP, 'EUC-KR'),
-            loadCSV(FILE_OPENINGS, 'EUC-KR'),
-            loadCSV(FILE_REVENUE, 'EUC-KR'),
-        ]);
-
-        const dongData = {};
-
-        // Initialize Data Structure
-        Object.keys(DONG_COORDINATES).forEach(dong => {
-            dongData[dong] = { 
-                rent: 0, 
-                population: 0, 
-                openings: 0, 
-                closeCount: 0, 
-                totalStores: 0, // Add Total Stores
-                revenue: 0,
-                revenueHistory: {}, // Store quarterly revenue
-                // Detail Data Containers
-                revenueByTime: Array(6).fill(0), // 00-06, 06-11, 11-14, 14-17, 17-21, 21-24
-                revenueByAge: { '10':0, '20':0, '30':0, '40':0, '50':0, '60':0 },
-                revenueByDay: { 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0, 'Sun':0 }
-            };
-        });
-
-        // 1. Rent Data
-        rentRaw.forEach(row => {
-            let dongName = row['행정구역'];
-            if (dongName) dongName = dongName.replace(/·/g, '.');
-
-            const rawValue = row['전체'];
-            
-            if (dongName && rawValue && dongData[dongName]) {
-                const rentSqM = parseInt(String(rawValue).replace(/,/g, ''), 10);
-                if (!isNaN(rentSqM)) {
-                    const rentPyeong = Math.round((rentSqM * 3.3058) / 10000);
-                    dongData[dongName].rent = rentPyeong;
-                }
-            }
-        });
-
-        // 2. Population Data
-        popRaw.forEach(row => {
-            let dongName = row['행정동_코드_명'];
-            if (dongName) dongName = dongName.replace(/·/g, '.');
-
-            const popVal = parseInt(row['총_유동인구_수'] || 0);
-            if (dongName && dongData[dongName]) {
-                dongData[dongName].population = popVal;
-            }
-        });
-
-        // 3. Openings Data (Store Status)
-        openingsRaw.forEach(row => {
-            let dongName = row['행정동_코드_명']; 
-            if (dongName) dongName = dongName.replace(/·/g, '.');
-
-            const openVal = parseInt(row['개업_점포_수'] || 0);
-            const closeVal = parseInt(row['폐업_점포_수'] || 0); 
-            const totalStoreVal = parseInt(row['점포_수'] || 0); // Parse Total Stores
-
-            if (dongName && dongData[dongName]) {
-                dongData[dongName].openings += openVal; 
-                dongData[dongName].closeCount += closeVal;
-                dongData[dongName].totalStores += totalStoreVal;
-            }
-        });
-
-        // 4. Revenue Data (Detailed Parsing)
-        revenueRaw.forEach(row => {
-            let dongName = row['행정동_코드_명'];
-            if (dongName) dongName = dongName.replace(/·/g, '.');
-
-            const salesVal = parseInt(row['당월_매출_금액'] || row['분기당_매출_금액'] || 0); // Try both keys just in case
-            const quarter = row['기준_분기_코드']; // '1', '2', '3', '4'
-
-            if (dongName && dongData[dongName]) {
-                dongData[dongName].revenue += salesVal;
-
-                // Accumulate Quarterly History
-                if (quarter) {
-                    if (!dongData[dongName].revenueHistory[quarter]) dongData[dongName].revenueHistory[quarter] = 0;
-                    dongData[dongName].revenueHistory[quarter] += salesVal;
-                }
-
-                // Parse Detailed Revenue
-                // Time
-                dongData[dongName].revenueByTime[0] += parseInt(row['시간대_00~06_매출_금액'] || 0);
-                dongData[dongName].revenueByTime[1] += parseInt(row['시간대_06~11_매출_금액'] || 0);
-                dongData[dongName].revenueByTime[2] += parseInt(row['시간대_11~14_매출_금액'] || 0);
-                dongData[dongName].revenueByTime[3] += parseInt(row['시간대_14~17_매출_금액'] || 0);
-                dongData[dongName].revenueByTime[4] += parseInt(row['시간대_17~21_매출_금액'] || 0);
-                dongData[dongName].revenueByTime[5] += parseInt(row['시간대_21~24_매출_금액'] || 0);
-
-                // Age
-                dongData[dongName].revenueByAge['10'] += parseInt(row['연령대_10_매출_금액'] || 0);
-                dongData[dongName].revenueByAge['20'] += parseInt(row['연령대_20_매출_금액'] || 0);
-                dongData[dongName].revenueByAge['30'] += parseInt(row['연령대_30_매출_금액'] || 0);
-                dongData[dongName].revenueByAge['40'] += parseInt(row['연령대_40_매출_금액'] || 0);
-                dongData[dongName].revenueByAge['50'] += parseInt(row['연령대_50_매출_금액'] || 0);
-                dongData[dongName].revenueByAge['60'] += parseInt(row['연령대_60_이상_매출_금액'] || 0);
-
-                // Day
-                dongData[dongName].revenueByDay['Mon'] += parseInt(row['월요일_매출_금액'] || 0);
-                dongData[dongName].revenueByDay['Tue'] += parseInt(row['화요일_매출_금액'] || 0);
-                dongData[dongName].revenueByDay['Wed'] += parseInt(row['수요일_매출_금액'] || 0);
-                dongData[dongName].revenueByDay['Thu'] += parseInt(row['목요일_매출_금액'] || 0);
-                dongData[dongName].revenueByDay['Fri'] += parseInt(row['금요일_매출_금액'] || 0);
-                dongData[dongName].revenueByDay['Sat'] += parseInt(row['토요일_매출_금액'] || 0);
-                dongData[dongName].revenueByDay['Sun'] += parseInt(row['일요일_매출_금액'] || 0);
-            }
-        });
+        const response = await fetch(FILE_JSON);
+        const rawData = await response.json();
 
         const formattedData = {};
-        Object.keys(dongData).forEach(dong => {
-            const d = dongData[dong];
-            
-            // 1. Revenue: Calculate Monthly Revenue per Store
-            // d.revenue is Quarterly Total.
-            // Monthly Avg = (Total / StoreCount) / 3
-            // Use Total Store Count from data
-            const storeCount = d.totalStores || (d.openings + d.closeCount) || 1; 
-            const monthlyRevenuePerStore = (d.revenue / storeCount) / 3;
-            
-            // 2. Population: Calculate Daily Floating Population
-            // d.population is Quarterly Total.
-            const dailyPopulation = d.population / 90;
-
-            // 3. Trends
-            // Convert history object to array, sorted by quarter
-            const trendArray = Object.keys(d.revenueHistory).sort().map(q => d.revenueHistory[q]);
-
-            formattedData[dong] = {
-                rent: d.rent, 
-                population: Math.round(dailyPopulation),
-                openings: d.openings,
-                closeCount: d.closeCount,
-                totalStores: d.totalStores, // Add Total Stores to return
-                revenue: Math.round(monthlyRevenuePerStore / 10000), // Man-won unit
-                trendHistory: trendArray, // Add Trend History
+        
+        // Iterate over defined coordinates to ensure we only return valid dongs on the map
+        Object.keys(DONG_COORDINATES).forEach(dong => {
+            // Default Empty Data
+            let item = {
+                rent: 0,
+                population: 0,
+                openings: 0,
+                closeCount: 0,
+                totalStores: 0,
+                revenue: 0,
+                investment: 0,
+                revenueHistory: [],
                 details: {
-                    time: d.revenueByTime,
-                    age: d.revenueByAge,
-                    day: d.revenueByDay
+                    time: Array(6).fill(0),
+                    age: { '10':0, '20':0, '30':0, '40':0, '50':0, '60':0 },
+                    day: { 'Mon':0, 'Tue':0, 'Wed':0, 'Thu':0, 'Fri':0, 'Sat':0, 'Sun':0 }
                 }
             };
+
+            const dongData = rawData[dong];
+            if (dongData) {
+                // 1. Common Data
+                item.population = dongData.pop || 0;
+                item.rent = dongData.rent || 0;
+
+                // 2. Industry Specific Data
+                // If targetCategory is provided, try to find it.
+                // If not found or not provided, aggregate ALL industries (or pick a default 'major' one?)
+                // Strategy: If targetCategory provided, look for exact match.
+                // If not found, look for partial match.
+                // If still not found (or no target), sum up everything (Market Scale).
+                
+                let targetIndData = null;
+                
+                if (targetCategory) {
+                    targetIndData = dongData.industries[targetCategory];
+                    if (!targetIndData) {
+                        // Try partial match
+                        const key = Object.keys(dongData.industries).find(k => k.includes(targetCategory) || targetCategory.includes(k));
+                        if (key) targetIndData = dongData.industries[key];
+                    }
+                }
+
+                if (targetIndData) {
+                    // Specific Industry Data
+                    item.openings = targetIndData.open;
+                    item.closeCount = targetIndData.close;
+                    item.totalStores = targetIndData.count;
+                    item.investment = targetIndData.cost || 0;
+                    
+                    // Revenue: Raw is Total Sum over period.
+                    // Normalize to Monthly Avg per Store for display
+                    // Assuming data is approx 1 year (4 quarters) sum.
+                    // Monthly Avg = (Total / StoreCount) / 12
+                    const storeCount = targetIndData.count || 1;
+                    const monthlyRev = Math.round((targetIndData.rev / storeCount) / 12 / 10000); // Man-Won
+                    item.revenue = monthlyRev; 
+
+                    item.details = targetIndData; // Pass details directly
+                } else {
+                    // Aggregate ALL (General Market Status of Dong)
+                    // Note: Investment is tricky for "All". Use average or 0.
+                    let totalRev = 0;
+                    let totalStore = 0;
+                    let totalOpen = 0;
+                    let totalClose = 0;
+                    
+                    Object.values(dongData.industries).forEach(ind => {
+                        totalRev += ind.rev;
+                        totalStore += ind.count;
+                        totalOpen += ind.open;
+                        totalClose += ind.close;
+                    });
+
+                    item.openings = totalOpen;
+                    item.closeCount = totalClose;
+                    item.totalStores = totalStore;
+                    // For aggregate, Revenue represents "Total Commercial Scale" of the Dong
+                    // So we just use a scaled down version or Raw Sum?
+                    // Let's use Monthly Avg per Store again to be consistent with scale
+                    item.revenue = totalStore > 0 ? Math.round((totalRev / totalStore) / 12 / 10000) : 0; 
+                    item.investment = 0; // "All" doesn't have a specific cost
+                }
+            }
+
+            formattedData[dong] = item;
         });
 
         return formattedData;
 
     } catch (error) {
-        console.error("Error loading dong data:", error);
+        console.error("Error loading seoul biz data:", error);
         return {};
     }
 };

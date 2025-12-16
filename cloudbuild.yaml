@@ -1,0 +1,18 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'gcr.io/cosmos-370708/bizinsight',
+      '--build-arg', 'VITE_GOOGLE_MAPS_API_KEY=${_VITE_GOOGLE_MAPS_API_KEY}',
+      '--build-arg', 'VITE_GOOGLE_MAPS_MAP_ID=${_VITE_GOOGLE_MAPS_MAP_ID}',
+      '--build-arg', 'VITE_YOUTUBE_API_KEY=${_VITE_YOUTUBE_API_KEY}',
+      '--build-arg', 'VITE_GEMINI_API_KEY=${_VITE_GEMINI_API_KEY}',
+      '.'
+    ]
+images:
+  - 'gcr.io/cosmos-370708/bizinsight'
+substitutions:
+  _VITE_GOOGLE_MAPS_API_KEY: ''
+  _VITE_GOOGLE_MAPS_MAP_ID: ''
+  _VITE_YOUTUBE_API_KEY: ''
+  _VITE_GEMINI_API_KEY: ''
